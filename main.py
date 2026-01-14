@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set_theme(style="whitegrid")
 
+
+
 from scipy import stats
 import statsmodels.api as sm
 from statsmodels.formula.api import ols
@@ -28,6 +30,37 @@ df['Gia_Thang_Truoc'] = df['Gia_Nha_TyVND'].shift(1)
 df['Gia_Thang_Truoc'] = df['Gia_Thang_Truoc'].fillna(0) # Điền giá trị thiếu tháng đầu
 # Loại bỏ các dòng có giá trị thiếu (NaN)
 df_model = df.dropna()
+
+
+
+
+# df = pd.read_csv("data.csv")
+# # df["date"] = pd.to_datetime(df["date"])
+
+# Kiểm tra giá trị rỗng
+print("\nKiểm tra dữ liệu rỗng:")
+print(df.isnull().sum())
+
+# # Xóa dòng có giá trị rỗng (nếu có)
+# df_model= df.dropna()
+
+# # Sắp xếp theo thời gian (quan trọng với chuỗi thời gian)
+# df_model = df_model.sort_values(by='Thang_Giao_Dich')
+
+
+
+# # =========================
+# # 3. TẠO LAG FEATURE
+# # =========================
+
+# # Giá tháng trước
+# df_clean["Gia_Thang_Truoc"] = df_clean["Gia_Nha_TyVND"].shift(1)
+
+# # Dòng đầu tiên sẽ bị NaN → loại bỏ
+# df_clean = df_clean.dropna()
+
+# print("\nDữ liệu sau khi tạo Lag Feature:")
+# print(df_clean.head())
 
 # Tách riêng phần "Sốt đất" ra để vẽ màu (nhưng vẫn để AI học để thấy nó sai)
 # Trong thực tế, ta nên lọc bỏ Outlier khi train, nhưng ở đây ta giữ lại 
