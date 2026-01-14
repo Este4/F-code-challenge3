@@ -1,21 +1,15 @@
+# --- 1. KHAI BÁO THƯ VIỆN ---
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-sns.set_theme(style="whitegrid")
-
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score, mean_squared_error
 
 
 from scipy import stats
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 import statsmodels.api as sm
-from statsmodels.formula.api import ols
-
-
-
-
-
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score, mean_squared_error
 
 # --- 1. LOAD DỮ LIỆU ---
 print("1. Đang đọc dữ liệu...") 
@@ -32,35 +26,11 @@ df['Gia_Thang_Truoc'] = df['Gia_Thang_Truoc'].fillna(0) # Điền giá trị thi
 df_model = df.dropna()
 
 
-
-
-# df = pd.read_csv("data.csv")
-# # df["date"] = pd.to_datetime(df["date"])
-
 # Kiểm tra giá trị rỗng
 print("\nKiểm tra dữ liệu rỗng:")
 print(df.isnull().sum())
 
-# # Xóa dòng có giá trị rỗng (nếu có)
-# df_model= df.dropna()
 
-# # Sắp xếp theo thời gian (quan trọng với chuỗi thời gian)
-# df_model = df_model.sort_values(by='Thang_Giao_Dich')
-
-
-
-# # =========================
-# # 3. TẠO LAG FEATURE
-# # =========================
-
-# # Giá tháng trước
-# df_clean["Gia_Thang_Truoc"] = df_clean["Gia_Nha_TyVND"].shift(1)
-
-# # Dòng đầu tiên sẽ bị NaN → loại bỏ
-# df_clean = df_clean.dropna()
-
-# print("\nDữ liệu sau khi tạo Lag Feature:")
-# print(df_clean.head())
 
 # Tách riêng phần "Sốt đất" ra để vẽ màu (nhưng vẫn để AI học để thấy nó sai)
 # Trong thực tế, ta nên lọc bỏ Outlier khi train, nhưng ở đây ta giữ lại 
@@ -117,4 +87,60 @@ plt.grid(True)
 # Lưu ảnh để bạn E làm báo cáo
 plt.savefig('bieu_do_phan_tich.png')
 print("✅ Đã vẽ xong! Ảnh được lưu là 'bieu_do_phan_tich.png'")
+plt.show()
+
+
+print("\n" + "="*30)
+print("PHẦN 6: ĐÁNH GIÁ CHUYÊN SÂU & KIỂM ĐỊNH")
+print("="*30)
+
+# 1. Tính toán phần dư (Residuals = Thực tế - Dự báo)
+residuals = y - y_pred
+
+# --- KIỂM ĐỊNH 1: ĐA CỘNG TUYẾN (VIF) ---
+# Kiểm tra xem các biến đầu vào có bị trùng lặp thông tin không
+print("\n[1] Kiểm tra Đa cộng tuyến (VIF):")
+vif_data = pd.DataFrame()
+vif_data["Feature"] = X.columns
+vif_data["VIF"] = [variance_inflation_factor(X.values, i) for i in range(len(X.columns))]
+
+print(vif_data)
+print("-> Nhận xét: Nếu VIF > 10 là bị đa cộng tuyến nặng (cần loại bỏ biến).")
+
+# --- KIỂM ĐỊNH 2: TÍNH CHUẨN CỦA PHẦN DƯ (NORMALITY) ---
+# Phần dư cần phải phân phối chuẩn (hình chuông) thì mô hình mới tin cậy
+print("\n[2] Kiểm tra phân phối chuẩn của phần dư:")
+shapiro_test = stats.shapiro(residuals)
+print(f"  - Shapiro-Wilk Test: Statistic={shapiro_test.statistic:.4f}, p-value={shapiro_test.pvalue:.4f}")
+if shapiro_test.pvalue > 0.05:
+    print("  -> Kết luận: Phần dư tuân theo phân phối chuẩn (Tốt).")
+else:
+    print("  -> Kết luận: Phần dư KHÔNG phân phối chuẩn (Mô hình chưa tối ưu hoặc dữ liệu nhiễu).")
+
+# --- VẼ BIỂU ĐỒ KIỂM ĐỊNH (VISUALIZATION) ---
+plt.figure(figsize=(14, 6))
+
+# Biểu đồ A: Histogram của phần dư (Xem có hình chuông không)
+plt.subplot(1, 2, 1)
+sns.histplot(residuals, kde=True, color='green')
+plt.title('Phân phối của sai số (Residuals)')
+plt.xlabel('Giá trị sai số (Tỷ VND)')
+plt.ylabel('Tần suất')
+
+# Biểu đồ B: Q-Q Plot (So sánh với đường chuẩn lý thuyết)
+plt.subplot(1, 2, 2)
+stats.probplot(residuals, dist="norm", plot=plt)
+plt.title('Q-Q Plot (Kiểm tra tính chuẩn)')
+
+plt.tight_layout()
+plt.show()
+
+# --- KIỂM ĐỊNH 3: PHƯƠNG SAI ĐỒNG NHẤT (HOMOSCEDASTICITY) ---
+# Kiểm tra xem lỗi có to dần khi giá nhà tăng không
+plt.figure(figsize=(8, 6))
+plt.scatter(y_pred, residuals, alpha=0.6, color='purple')
+plt.axhline(0, color='red', linestyle='--', lw=2)
+plt.xlabel('Giá trị dự báo (Fitted Values)')
+plt.ylabel('Phần dư (Residuals)')
+plt.title('Biểu đồ Residuals vs. Fitted Values')
 plt.show()
