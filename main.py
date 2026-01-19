@@ -15,6 +15,7 @@ import statsmodels.api as sm
 print("1. Đang đọc dữ liệu...") 
 df = pd.read_csv('data.csv')
 
+
 # sap xep theo thoi gian de tinh toan
 df = df.sort_values(by='Thang_Giao_Dich')
 
@@ -36,9 +37,21 @@ print(df.isnull().sum())
 # Trong thực tế, ta nên lọc bỏ Outlier khi train, nhưng ở đây ta giữ lại 
 # để chứng minh luận điểm: "Mô hình sai khi thị trường điên loạn".
 
+
+
+
+
+
+
+
+
+
+
+
+
 # --- 2. CHUẨN BỊ TRAIN ---
 # Input: Thang, Khoảng cách, Giá tháng trước (Time Series)
-X = df[['Thang_Giao_Dich', 'Khoang_Cach_KM', 'Gia_Thang_Truoc']]
+X = df[['Thang_Giao_Dich', 'Khoang_Cach_KM', 'Gia_Thang_Truoc', 'Dien_Tich_m2']]
 y = df['Gia_Nha_TyVND']
 
 # --- 3. HUẤN LUYỆN MÔ HÌNH ---
@@ -48,6 +61,7 @@ model.fit(X, y)
 
 # --- 4. DỰ BÁO VÀ ĐÁNH GIÁ ---
 y_pred = model.predict(X) # Nhờ máy dự đoán lại toàn bộ
+
 mse = mean_squared_error(y, y_pred)
 r2 = r2_score(y, y_pred)
 
@@ -93,6 +107,15 @@ plt.show()
 print("\n" + "="*30)
 print("PHẦN 6: ĐÁNH GIÁ CHUYÊN SÂU & KIỂM ĐỊNH")
 print("="*30)
+
+
+
+
+
+
+
+
+
 
 # 1. Tính toán phần dư (Residuals = Thực tế - Dự báo)
 residuals = y - y_pred
