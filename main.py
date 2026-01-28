@@ -2,117 +2,90 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy import stats
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
-# --- Chuẩn bị dữ liệu ---
-# Mình tạo nhanh tập data mẫu dựa trên yêu cầu của bạn
-raw_data = {
-    'Quận': ['Quận 9', 'Quận Tân Bình', 'Quận 9', 'Quận Tân Phú', 'Quận 9',
-             'Quận 7', 'Quận 2', 'Quận 11', 'Quận Thủ Đức', 'Huyện Bình Chánh',
-             'Quận 9', 'Quận Tân Phú', 'Quận 9', 'Quận 7', 'Quận 2'] * 7,
-    'Diện_tích': [69, 74.1, 46.5, 65, 70, 70, 56.6, 20, 89, 55, 68, 74, 50, 65, 72] * 7,
-    'Số_phòng': [2, 2, 1, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2] * 7,
-    'Giá_triệu': [2650, 3970, 678, 2870, 3000, 3200, 3800, 1570, 3500, 1500, 2586, 3950, 1640, 2360, 2850] * 7
-}
+plt.style.use('ggplot') 
 
-df = pd.DataFrame(raw_data)
+print("--- BƯỚC 1: ĐỌC VÀ LÀM SẠCH DỮ LIỆU ---")
+try:
+    df = pd.read_csv('data.csv')
+except FileNotFoundError:
+    print("File not found")
+    exit()
 
-# Thêm một chút nhiễu cho dữ liệu có vẻ "thật" hơn, không bị quá khớp
-np.random.seed(42)
-df['Giá_triệu'] += np.random.normal(0, 100, len(df))
-df['Diện_tích'] += np.random.normal(0, 2, len(df))
+df = df.rename(columns={
+    'QUẬN HUYỆN': 'Quận', 'DIỆN TÍCH - M2': 'Diện_tích',
+    'SỐ PHÒNG': 'Số_phòng', 'GIÁ - TRIỆU ĐỒNG': 'Giá_triệu'
+})
+df = df[['Quận', 'Diện_tích', 'Số_phòng', 'Giá_triệu']].dropna()
 
-# Check xem có dòng nào trống không rồi bỏ luôn cho sạch
-df = df.dropna()
-print(f"Dữ liệu sẵn sàng với {len(df)} dòng.")
+df = df[(df["Giá_triệu"] > 100) & (df["Diện_tích"] > 10)]
 
-# --- Trực quan hóa (EDA) ---
-# Chỉ giữ lại những biểu đồ thực sự cần thiết để giải thích cho khách/sếp
-plt.figure(figsize=(16, 5))
+Q1 = df["Giá_triệu"].quantile(0.25)
+Q3 = df["Giá_triệu"].quantile(0.75)
+IQR = Q3 - Q1
+df_clean = df[(df["Giá_triệu"] >= (Q1 - 1.5 * IQR)) & (df["Giá_triệu"] <= (Q3 + 1.5 * IQR))].copy()
 
-# 1. Xem phân phối giá nhà
-plt.subplot(1, 3, 1)
-sns.histplot(df['Giá_triệu'], kde=True, color='teal')
-plt.title('Phân phối giá nhà')
+print(f"Số mẫu sau khi lọc: {len(df_clean)}")
 
-# 2. Quan hệ giữa Diện tích và Giá (Cái này quan trọng nhất)
-plt.subplot(1, 3, 2)
-sns.regplot(data=df, x='Diện_tích', y='Giá_triệu', scatter_kws={'alpha':0.5}, line_kws={'color':'red'})
-plt.title('Diện tích vs Giá (Có đường hồi quy)')
+print("\n--- BƯỚC 2: TẠO BIẾN TIME SERIES & ONE-HOT ---")
+df_clean['Giá_kỳ_trước'] = df_clean['Giá_triệu'].shift(1)
+df_clean = df_clean.dropna()
 
-# 3. So sánh giá giữa các Quận
-plt.subplot(1, 3, 3)
-df.groupby('Quận')['Giá_triệu'].mean().sort_values().plot(kind='barh', color='salmon')
-plt.title('Giá trung bình theo khu vực')
-
-plt.tight_layout()
-plt.show()
-
-# --- Tiền xử lý để chạy model ---
-# Chuyển cột Quận (chữ) sang số bằng One-hot encoding
-# Lưu ý: drop_first=True để tránh bẫy đa cộng tuyến (Dummy Variable Trap)
-df_final = pd.get_dummies(df, columns=['Quận'], drop_first=True)
+df_final = pd.get_dummies(df_clean, columns=['Quận'], drop_first=True)
 
 X = df_final.drop('Giá_triệu', axis=1)
 y = df_final['Giá_triệu']
 
-# Chia tập test 20% để kiểm tra độ chính xác sau khi train
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=False)
 
-# --- Huấn luyện mô hình ---
+print("\n--- BƯỚC 3: HUẤN LUYỆN MÔ HÌNH OLS ---")
 model = LinearRegression()
 model.fit(X_train, y_train)
-
-# --- Đánh giá kết quả ---
 preds = model.predict(X_test)
+
 r2 = r2_score(y_test, preds)
 mae = mean_absolute_error(y_test, preds)
 rmse = np.sqrt(mean_squared_error(y_test, preds))
 
-print("-" * 30)
-print(f"Chỉ số R2: {r2:.4f} (Giải thích được {r2*100:.1f}% dữ liệu)")
-print(f"Sai số MAE: {mae:.2f} triệu")
-print(f"Sai số RMSE: {rmse:.2f} triệu")
-print("-" * 30)
+print(f"R2 Score: {r2:.4f}")
+print(f"MAE: {mae:,.0f}")
+print(f"RMSE: {rmse:,.0f}")
 
-# --- Phân tích hệ số (Để biết cái nào ảnh hưởng nhất) ---
-importance = pd.DataFrame({
-    'Yếu tố': X.columns,
-    'Mức độ ảnh hưởng': model.coef_
-}).sort_values(by='Mức độ ảnh hưởng', ascending=False)
+print("\n--- BƯỚC 4: KIỂM TRA ĐA CỘNG TUYẾN (VIF) ---")
+vif_data = pd.DataFrame()
+vif_data["Feature"] = X.columns
+vif_data["VIF"] = [variance_inflation_factor(X.values.astype(float), i) for i in range(X.shape[1])]
+print(vif_data.sort_values(by="VIF", ascending=False).head(5))
 
-print("\nHệ số hồi quy (Coefficients):")
-print(importance)
+print("\n--- BƯỚC 5: TRỰC QUAN HÓA DỮ LIỆU ---")
 
-# --- Thử dự đoán thực tế ---
-# Ví dụ: Một căn 75m2, 3 phòng ở Quận 9
-test_case = pd.DataFrame(0, index=[0], columns=X.columns)
-test_case['Diện_tích'] = 75
-test_case['Số_phòng'] = 3
-if 'Quận_Quận 9' in test_case.columns:
-    test_case['Quận_Quận 9'] = 1
+plt.figure(figsize=(12, 5))
+plt.plot(y_test.values[:60], label='Giá Thực tế', color='#1f77b4', linewidth=2)
+plt.plot(preds[:60], label='Giá Dự đoán', color='#ff7f0e', linestyle='--', linewidth=2)
+plt.title('BIỂU ĐỒ 1: So sánh Thực tế vs Dự đoán (60 mẫu đầu)', fontsize=14)
+plt.legend()
+plt.tight_layout()
+plt.show()
 
-predicted_val = model.predict(test_case)[0]
-print(f"\n=> Dự đoán nhà 75m2, 3 phòng tại Quận 9: {predicted_val:.2f} triệu")
+plt.figure(figsize=(10, 5))
+sns.histplot(y_test - preds, kde=True, bins=30, color='green')
+plt.title('BIỂU ĐỒ 2: Phân phối sai số (Residuals)', fontsize=14)
+plt.tight_layout()
+plt.show()
 
-# --- Kiểm tra giả định (Residuals) ---
-# Biểu đồ này để chứng minh mô hình chạy ổn, không bị lệch lạc
-residuals = y_test - preds
-plt.figure(figsize=(10, 4))
+results_df = pd.DataFrame({'Thực tế': y_test, 'Dự đoán': preds})
+results_df['Sai lệch Abs'] = np.abs(results_df['Thực tế'] - results_df['Dự đoán'])
+top_errors = results_df.sort_values(by='Sai lệch Abs', ascending=False).head(5)
 
-plt.subplot(1, 2, 1)
-plt.scatter(preds, residuals, alpha=0.5)
-plt.axhline(0, color='red', linestyle='--')
-plt.xlabel('Giá dự đoán')
-plt.ylabel('Sai số (Residuals)')
-plt.title('Residuals Plot')
+print("\n--- TOP 5 CA DỰ BÁO SAI NHẤT (LIMITATIONS) ---")
+print(top_errors)
 
-plt.subplot(1, 2, 2)
-stats.probplot(residuals, dist="norm", plot=plt)
-plt.title('Q-Q Plot')
-
+top_errors[['Thực tế', 'Dự đoán']].plot(kind='bar', figsize=(10, 6), color=['#2ca02c', '#d62728'])
+plt.title('BIỂU ĐỒ 3: Phân tích giới hạn - Các ca biến động bất thường', fontsize=14)
+plt.xticks(rotation=0)
 plt.tight_layout()
 plt.show()
